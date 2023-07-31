@@ -426,7 +426,7 @@ impl KnownModel for Bert {
     }
 
     fn bot_token_id(&self) -> Option<TokenId> {
-        None
+        self.tokenizer.id("[PAD]".as_bytes())
     }
 
     fn eot_token_id(&self) -> TokenId {
