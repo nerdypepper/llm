@@ -389,7 +389,7 @@ impl KnownModel for Bert {
         // finish evaluation
         common::read_last_token(session, &outputs.result, n_vocab, input_len);
         common::extract_logits(output_request, &outputs.result, n_vocab, input_len);
-        common::extract_embeddings(output_request, &outputs.embedding_result, n_embd, input_len);
+        common::extract_embeddings(output_request, &outputs.embedding_result, n_embd, 1);
     }
 
     fn hyperparameters(&self) -> &Self::Hyperparameters {
