@@ -217,8 +217,6 @@ impl KnownModel for Bert {
             let embd = builder.embd;
 
             // IL = word_embeddings + token_types + position_embeddingso
-            let mut input_layer = ctx0.op_get_rows(&self.word_embeddings, embd);
-
             // token-types: a zero tensor
             let mut token_types = ctx0.new_tensor_1d(llm_base::ElementType::I32, input_len);
             token_types.zero_data();
@@ -228,12 +226,15 @@ impl KnownModel for Bert {
             let mut positions = ctx0.new_tensor_1d(llm_base::ElementType::I32, input_len);
             unsafe { positions.write_data(bytemuck::cast_slice(&position_buf)) };
 
+            let mut input_layer = ctx0.op_get_rows(&self.word_embeddings, embd);
+
             // IL += token_types
             input_layer = ctx0.op_add(
                 &input_layer,
                 &ctx0.op_get_rows(&self.token_type_embeddings, &token_types),
             );
 
+            // IL += position_embeddings
             input_layer = ctx0.op_add(
                 &input_layer,
                 &ctx0.op_get_rows(&self.position_embeddings, &positions),
@@ -241,15 +242,16 @@ impl KnownModel for Bert {
             // end of IL computation
 
             // embd norm
-            input_layer = ctx0.op_norm(&input_layer);
+            {
+                input_layer = ctx0.op_norm(&input_layer);
 
-            input_layer = {
-                let repeat_w = ctx0.op_repeat(&self.ln_e_w, &input_layer);
-                let multiplied = ctx0.op_mul(&repeat_w, &input_layer);
-                let repeat_b = ctx0.op_repeat(&self.ln_e_b, &input_layer);
-                let added = ctx0.op_add(&multiplied, &repeat_b);
-                added
-            };
+                input_layer = {
+                    ctx0.op_add(
+                        &ctx0.op_mul(&ctx0.op_repeat(&self.ln_e_w, &input_layer), &input_layer),
+                        &ctx0.op_repeat(&self.ln_e_b, &input_layer),
+                    )
+                };
+            }
 
             for il in 0..n_layer {
                 ctx0.set_offloading(self.params.should_offload(il));
@@ -343,7 +345,7 @@ impl KnownModel for Bert {
                 current = ctx0.op_mul_mat(&self.layers[il].ff_o_w, &current);
                 current = ctx0.op_add(&ctx0.op_repeat(&self.layers[il].ff_o_b, &current), &current);
 
-                // attentions bypais the intermediate layer
+                // attentions bypass the intermediate layer
                 current = ctx0.op_add(&att_output, &current);
 
                 // output norm
@@ -365,9 +367,9 @@ impl KnownModel for Bert {
             input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
             // pooler
-            let sum_buf: Vec<f32> = std::iter::repeat(1.0 / input_len as f32).collect();
             let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
-            unsafe { sum.write_data(bytemuck::cast_slice(&sum_buf)) };
+            sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
+
             input_layer = ctx0.op_mul_mat(&input_layer, &sum);
 
             // normalizer
@@ -382,29 +384,6 @@ impl KnownModel for Bert {
                                                            // result?
                 },
             )
-
-            // ctx0.use_scratch(builder.get_scratch(0));
-
-            // // norm
-            // input_layer = ctx0.op_rms_norm(&input_layer);
-
-            // // inpL = inpL*norm(broadcasted)
-            // input_layer = ctx0.op_mul(&input_layer, &self.norm);
-
-            // let embedding_result: ggml::Tensor = input_layer.share();
-
-            // ctx0.set_offloading(false);
-            // // lm_head
-            // input_layer = ctx0.op_mul_mat(&self.output, &input_layer);
-
-            // ctx0.use_scratch(None);
-            // (
-            //     gf,
-            //     GraphOutputs {
-            //         result: input_layer,
-            //         embedding_result,
-            //     },
-            // )
         });
 
         // finish evaluation

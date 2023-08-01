@@ -246,6 +246,12 @@ impl Context {
     pub fn storage(&self) -> &ContextStorage {
         self.storage.as_ref().unwrap()
     }
+
+    /// Set all values of the tensor with the specified value.
+    pub fn set_f32(&self, a: &Tensor, x: f32) -> Tensor {
+        let raw = unsafe { sys::ggml_set_f32(a.ptr.as_ptr(), x) };
+        self.new_tensor_raw(raw)
+    }
 }
 // Operations
 impl Context {
