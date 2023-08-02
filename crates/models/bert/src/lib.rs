@@ -4,7 +4,7 @@
 use std::{error::Error, sync::Arc};
 
 use llm_base::{
-    ggml::{self},
+    ggml,
     model::{common, HyperparametersWriteError},
     util, FileType, GraphOutputs, InferenceSession, InferenceSessionConfig, KnownModel, LoadError,
     ModelParameters, OutputRequest, Regex, TensorLoader, TokenId, Tokenizer,
@@ -364,12 +364,13 @@ impl KnownModel for Bert {
                 input_layer = current;
             }
 
+            ctx0.set_offloading(false);
+
             input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
             // pooler
             let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
             sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
-
             input_layer = ctx0.op_mul_mat(&input_layer, &sum);
 
             // normalizer
