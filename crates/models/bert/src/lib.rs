@@ -351,11 +351,9 @@ impl KnownModel for Bert {
                 // input for next layer
                 input_layer = current;
             }
-
-            ctx0.set_offloading(false);
-
             input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
+            ctx0.set_offloading(false);
             // pooler
             let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
             sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
@@ -363,6 +361,7 @@ impl KnownModel for Bert {
 
             // normalizer
             let length = ctx0.op_sqrt(&ctx0.op_sum(&ctx0.op_sqr(&input_layer)));
+
             input_layer = ctx0.op_scale(&input_layer, &ctx0.op_div(&ctx0.new_f32(1.0), &length));
 
             (
