@@ -64,7 +64,10 @@ fn get_embeddings(
     query: &str,
 ) -> Vec<f32> {
     let s = std::time::Instant::now();
-    let mut session = model.start_session(Default::default());
+    let session_config = llm::InferenceSessionConfig {
+        ..Default::default()
+    };
+    let mut session = model.start_session(session_config);
     let mut output_request = llm::OutputRequest {
         all_logits: None,
         embeddings: Some(Vec::new()),
