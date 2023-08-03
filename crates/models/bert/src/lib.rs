@@ -242,16 +242,10 @@ impl KnownModel for Bert {
             // end of IL computation
 
             // embd norm
-            {
-                input_layer = ctx0.op_norm(&input_layer);
 
-                input_layer = {
-                    ctx0.op_add(
-                        &ctx0.op_mul(&ctx0.op_repeat(&self.ln_e_w, &input_layer), &input_layer),
-                        &ctx0.op_repeat(&self.ln_e_b, &input_layer),
-                    )
-                };
-            }
+            input_layer = ctx0.op_norm(&input_layer);
+
+            input_layer = ctx0.op_add(&ctx0.op_mul(&input_layer, &self.ln_e_w), &self.ln_e_b);
 
             for il in 0..n_layer {
                 ctx0.set_offloading(self.params.should_offload(il));
@@ -263,8 +257,8 @@ impl KnownModel for Bert {
                 {
                     let q_current = ctx0.op_reshape_3d(
                         &ctx0.op_add(
-                            &ctx0.op_repeat(&self.layers[il].q_b, &current),
                             &ctx0.op_mul_mat(&self.layers[il].q_w, &current),
+                            &self.layers[il].q_b,
                         ),
                         d_head,
                         n_head,
@@ -274,8 +268,8 @@ impl KnownModel for Bert {
 
                     let k_current = ctx0.op_reshape_3d(
                         &ctx0.op_add(
-                            &ctx0.op_repeat(&self.layers[il].k_b, &current),
                             &ctx0.op_mul_mat(&self.layers[il].k_w, &current),
+                            &self.layers[il].k_b,
                         ),
                         d_head,
                         n_head,
@@ -285,8 +279,8 @@ impl KnownModel for Bert {
 
                     let v_current = ctx0.op_reshape_3d(
                         &ctx0.op_add(
-                            &ctx0.op_repeat(&self.layers[il].v_b, &current),
                             &ctx0.op_mul_mat(&self.layers[il].v_w, &current),
+                            &self.layers[il].v_b,
                         ),
                         d_head,
                         n_head,
@@ -315,8 +309,8 @@ impl KnownModel for Bert {
 
                 // attention output
                 current = ctx0.op_add(
-                    &ctx0.op_repeat(&self.layers[il].o_b, &current),
                     &ctx0.op_mul_mat(&self.layers[il].o_w, &current),
+                    &self.layers[il].o_b,
                 );
 
                 // re-add the layer input
@@ -326,11 +320,8 @@ impl KnownModel for Bert {
                 {
                     current = ctx0.op_norm(&current);
                     current = ctx0.op_add(
-                        &ctx0.op_mul(
-                            &ctx0.op_repeat(&self.layers[il].ln_att_w, &current),
-                            &current,
-                        ),
-                        &ctx0.op_repeat(&self.layers[il].ln_att_b, &current),
+                        &ctx0.op_mul(&current, &self.layers[il].ln_att_w),
+                        &self.layers[il].ln_att_b,
                     );
                 }
 
@@ -338,12 +329,12 @@ impl KnownModel for Bert {
 
                 // intermediate output
                 current = ctx0.op_mul_mat(&self.layers[il].ff_i_w, &current);
-                current = ctx0.op_add(&ctx0.op_repeat(&self.layers[il].ff_i_b, &current), &current);
+                current = ctx0.op_add(&current, &self.layers[il].ff_i_b);
                 current = ctx0.op_gelu(&current);
 
                 // layer output
                 current = ctx0.op_mul_mat(&self.layers[il].ff_o_w, &current);
-                current = ctx0.op_add(&ctx0.op_repeat(&self.layers[il].ff_o_b, &current), &current);
+                current = ctx0.op_add(&current, &self.layers[il].ff_o_b);
 
                 // attentions bypass the intermediate layer
                 current = ctx0.op_add(&att_output, &current);
@@ -352,22 +343,17 @@ impl KnownModel for Bert {
                 {
                     current = ctx0.op_norm(&current);
                     current = ctx0.op_add(
-                        &ctx0.op_mul(
-                            &ctx0.op_repeat(&self.layers[il].ln_out_w, &current),
-                            &current,
-                        ),
-                        &ctx0.op_repeat(&self.layers[il].ln_out_b, &current),
+                        &ctx0.op_mul(&current, &self.layers[il].ln_out_w),
+                        &self.layers[il].ln_out_b,
                     );
                 }
 
                 // input for next layer
                 input_layer = current;
             }
-
-            ctx0.set_offloading(false);
-
             input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
+            ctx0.set_offloading(false);
             // pooler
             let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
             sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
@@ -375,6 +361,7 @@ impl KnownModel for Bert {
 
             // normalizer
             let length = ctx0.op_sqrt(&ctx0.op_sum(&ctx0.op_sqr(&input_layer)));
+
             input_layer = ctx0.op_scale(&input_layer, &ctx0.op_div(&ctx0.new_f32(1.0), &length));
 
             (
