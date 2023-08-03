@@ -100,8 +100,8 @@ fn main() {
             .then(a.query_token_count.cmp(&b.query_token_count))
     });
 
-    let fastest = results.first().unwrap();
-    let slowest = results.last().unwrap();
+    let slowest = results.first().unwrap();
+    let fastest = results.last().unwrap();
 
     println!("slowest: {:.04} tok/ms ({})", slowest.rate(), slowest);
     println!("fastest: {:.04} tok/ms ({})", fastest.rate(), fastest);
