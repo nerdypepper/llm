@@ -265,8 +265,13 @@ impl InferenceSession {
                     plan.execute(ctx0);
                 }
             } else {
-                let mut plan = GraphExecutionPlan::new(&mut built_gf, self.config.n_threads);
-                plan.execute(ctx0);
+                if let Some(ref metal_context) = self.metal_context {
+                    metal_context.graph_compute(&mut built_gf);
+                    metal_context.get_tensor(&built_result.result);
+                } else {
+                    let mut plan = GraphExecutionPlan::new(&mut built_gf, self.config.n_threads);
+                    plan.execute(ctx0);
+                }
             }
         }
         #[cfg(not(feature = "metal"))]
