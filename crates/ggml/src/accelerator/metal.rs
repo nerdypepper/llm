@@ -80,6 +80,7 @@ impl MetalContext {
 
     /// Computes the specified graph using Metal.
     pub fn graph_compute(&self, graph: &mut ComputationGraph) {
+        println!("COMPUTING GRAPH");
         unsafe {
             metal::ggml_metal_graph_compute(
                 self.ptr.as_ptr(),

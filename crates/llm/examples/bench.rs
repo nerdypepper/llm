@@ -89,44 +89,32 @@ fn main() {
     });
     let inference_parameters = llm::InferenceParameters::default();
 
-    // Generate embeddings for query and comparands
-    let mut results = corpus
-        .into_iter()
-        .map(|l| get_embeddings(model.as_ref(), &inference_parameters, l))
-        .collect::<Vec<_>>();
-    results.sort_by(|a, b| {
-        a.elapsed
-            .cmp(&b.elapsed)
-            .then(a.query_token_count.cmp(&b.query_token_count))
-    });
-
-    let slowest = results.first().unwrap();
-    let fastest = results.last().unwrap();
-
-    println!("slowest: {:.04} tok/ms ({})", slowest.rate(), slowest);
-    println!("fastest: {:.04} tok/ms ({})", fastest.rate(), fastest);
-    println!(
-        "average: {:.04} tok/ms, over {} readings",
-        results
-            .clone()
-            .into_iter()
-            .reduce(|acc, x| acc + x)
-            .unwrap()
-            .rate(),
-        results.len(),
-    );
-}
-
-fn get_embeddings(
-    model: &dyn llm::Model,
-    _inference_parameters: &llm::InferenceParameters,
-    query: &str,
-) -> BenchResult {
-    let s = std::time::Instant::now();
     let session_config = llm::InferenceSessionConfig {
         ..Default::default()
     };
     let mut session = model.start_session(session_config);
+
+    // println!("Embedding: {}", corpus.first().unwrap());
+    let input = "My favourite animal is the dog";
+
+    let embedding = get_embeddings(model.as_ref(), &mut session, &inference_parameters, input);
+
+    println!("First ten dimensions of the embeddings are...");
+    println!("{:.02?}", embedding.get(0..10));
+
+    let nan_count = embedding.into_iter().filter(|e| e.is_nan()).count();
+    if nan_count > 0 {
+        panic!("{} NaNs in embedding", nan_count);
+    }
+}
+
+fn get_embeddings(
+    model: &dyn llm::Model,
+    session: &mut llm::InferenceSession,
+    _inference_parameters: &llm::InferenceParameters,
+    query: &str,
+) -> Vec<f32> {
+    let s = std::time::Instant::now();
     let mut output_request = llm::OutputRequest {
         all_logits: None,
         embeddings: Some(Vec::new()),
@@ -139,11 +127,8 @@ fn get_embeddings(
         .iter()
         .map(|(_, tok)| *tok)
         .collect::<Vec<_>>();
-    model.evaluate(&mut session, &query_token_ids, &mut output_request);
-    let _embeddings = output_request.embeddings.unwrap();
-    BenchResult {
-        elapsed: s.elapsed(),
-        query_token_count: query_token_ids.len(),
-    }
-}
 
+    dbg!(&query_token_ids);
+    model.evaluate(session, &query_token_ids, &mut output_request);
+    output_request.embeddings.unwrap()
+}

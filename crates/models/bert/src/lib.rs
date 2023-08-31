@@ -195,6 +195,7 @@ impl KnownModel for Bert {
         } = self.hyperparameters;
 
         let d_head = n_embd / n_head;
+        let n_layer = 1;
 
         let outputs = session.compute(self.context.clone(), input_tokens, |builder| {
             let mut ctx0 = builder.ctx0.borrow_mut();
@@ -243,10 +244,7 @@ impl KnownModel for Bert {
                 {
                     print_shape(&current, "current");
                     let q_current = ctx0.op_reshape_3d(
-                        &ctx0.op_add(
-                            &ctx0.op_mul_mat(&self.layers[il].q_w, &current),
-                            &self.layers[il].q_b,
-                        ),
+                        &ctx0.op_mul_mat(&self.layers[il].q_w, &current),
                         d_head,
                         n_head,
                         input_len,
@@ -292,11 +290,11 @@ impl KnownModel for Bert {
                     let mut kq = ctx0.op_mul_mat(&k, &q);
 
                     // TODO: look into op_scale_inplace and op_soft_max_inplace
-                    kq = ctx0.op_scale(
-                        &kq,
-                        &ctx0.new_f32(1.0 / ((n_embd as f32 / n_head as f32).sqrt())),
-                    );
-                    kq = ctx0.op_soft_max(&kq);
+                    // kq = ctx0.op_scale(
+                    //     &kq,
+                    //     &ctx0.new_f32(1.0 / ((n_embd as f32 / n_head as f32).sqrt())),
+                    // );
+                    // kq = ctx0.op_soft_max(&kq);
 
                     v = ctx0.op_cont(&ctx0.op_transpose(&v));
 
@@ -310,60 +308,60 @@ impl KnownModel for Bert {
                 }
 
                 // attention output
-                current = ctx0.op_add(
-                    &ctx0.op_mul_mat(&self.layers[il].o_w, &current),
-                    &self.layers[il].o_b,
-                );
+                // current = ctx0.op_add(
+                //     &ctx0.op_mul_mat(&self.layers[il].o_w, &current),
+                //     &self.layers[il].o_b,
+                // );
 
-                // re-add the layer input
-                current = ctx0.op_add(&current, &input_layer);
+                // // re-add the layer input
+                // current = ctx0.op_add(&current, &input_layer);
 
-                // attention norm
-                {
-                    current = ctx0.op_norm(&current);
-                    current = ctx0.op_add(
-                        &ctx0.op_mul(&current, &self.layers[il].ln_att_w),
-                        &self.layers[il].ln_att_b,
-                    );
-                }
+                // // attention norm
+                // {
+                //     current = ctx0.op_norm(&current);
+                //     current = ctx0.op_add(
+                //         &ctx0.op_mul(&current, &self.layers[il].ln_att_w),
+                //         &self.layers[il].ln_att_b,
+                //     );
+                // }
 
-                let att_output = current.share();
+                // let att_output = current.share();
 
                 // intermediate output
-                current = ctx0.op_mul_mat(&self.layers[il].ff_i_w, &current);
-                current = ctx0.op_add(&current, &self.layers[il].ff_i_b);
-                current = ctx0.op_gelu(&current);
+                // current = ctx0.op_mul_mat(&self.layers[il].ff_i_w, &current);
+                // current = ctx0.op_add(&current, &self.layers[il].ff_i_b);
+                // current = ctx0.op_gelu(&current);
 
-                // layer output
-                current = ctx0.op_mul_mat(&self.layers[il].ff_o_w, &current);
-                current = ctx0.op_add(&current, &self.layers[il].ff_o_b);
+                // // layer output
+                // current = ctx0.op_mul_mat(&self.layers[il].ff_o_w, &current);
+                // current = ctx0.op_add(&current, &self.layers[il].ff_o_b);
 
-                // attentions bypass the intermediate layer
-                current = ctx0.op_add(&att_output, &current);
+                // // attentions bypass the intermediate layer
+                // current = ctx0.op_add(&att_output, &current);
 
-                // output norm
-                {
-                    current = ctx0.op_norm(&current);
-                    current = ctx0.op_add(
-                        &ctx0.op_mul(&current, &self.layers[il].ln_out_w),
-                        &self.layers[il].ln_out_b,
-                    );
-                }
+                // // output norm
+                // {
+                //     current = ctx0.op_norm(&current);
+                //     current = ctx0.op_add(
+                //         &ctx0.op_mul(&current, &self.layers[il].ln_out_w),
+                //         &self.layers[il].ln_out_b,
+                //     );
+                // }
 
-                // input for next layer
+                // // input for next layer
                 input_layer = current;
             }
-            input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
+            // input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
-            // ctx0.set_offloading(false);
-            // pooler
-            let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
-            sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
-            input_layer = ctx0.op_cpy(
-                &input_layer,
-                &ctx0.new_tensor_2d(ggml::Type::F16, input_len, n_embd),
-            );
-            input_layer = ctx0.op_mul_mat(&input_layer, &sum);
+            // // ctx0.set_offloading(false);
+            // // pooler
+            // let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
+            // sum = ctx0.set_f32(&sum, 1.0 / (input_len as f32));
+            // input_layer = ctx0.op_cpy(
+            //     &input_layer,
+            //     &ctx0.new_tensor_2d(ggml::Type::F16, input_len, n_embd),
+            // );
+            // input_layer = ctx0.op_mul_mat(&input_layer, &sum);
 
             // normalizer
             // let length = ctx0.op_sqrt(&ctx0.op_sum(&ctx0.op_sqr(&input_layer)));
@@ -484,5 +482,5 @@ struct Layer {
 }
 
 fn print_shape(t: &ggml::Tensor, name: &str) {
-    println!("{name} {} [{}] {:?}", t.get_type(), t.is_contiguous(), t.get_ne());
+    // println!("{name} {} [{}] {:?}", t.get_type(), t.is_contiguous(), t.get_ne());
 }

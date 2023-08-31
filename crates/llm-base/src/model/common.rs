@@ -30,7 +30,7 @@ pub fn extract_logits(
         // SAFETY: Tensor data can be read (properly aligned, initialized,
         // data will not be mutated or otherwise aliased during the copy),
         // and we're not reading past the end of the tensor data.
-        assert_eq!(input_layer.nelements(), n_vocab * n);
+        assert!(input_layer.nelements() >= n_vocab * n);
         unsafe {
             input_layer.read_data(0, bytemuck::cast_slice_mut(all_logits));
         }
@@ -50,7 +50,7 @@ pub fn extract_embeddings(
         // Create a new vector to hold all embeddings
         let mut all_embeddings = vec![0.0; n_embd * n];
         // SAFETY: Same rationale as for the "Extract logits" section applies.
-        assert_eq!(embeddings_tensor.nelements(), n_embd * n);
+        assert!(embeddings_tensor.nelements() >= n_embd * n);
         unsafe {
             embeddings_tensor.read_data(0, bytemuck::cast_slice_mut(&mut all_embeddings));
         }
