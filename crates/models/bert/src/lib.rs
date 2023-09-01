@@ -204,29 +204,34 @@ impl KnownModel for Bert {
             let embd = builder.embd;
 
             let mut input_layer = ctx0.op_get_rows(&self.word_embeddings, embd);
+            print_shape(&input_layer, "input_layer");
 
             // IL = word_embeddings + token_types + position_embeddingso
             {
                 // token-types: a zero tensor
                 let mut token_types = ctx0.new_tensor_1d(llm_base::ElementType::I32, input_len);
                 token_types.zero_data();
+                print_shape(&token_types, "token_types");
 
                 // position embeddings: another tensor
                 let position_buf: Vec<i32> = (0..input_len as i32).collect();
                 let mut positions = ctx0.new_tensor_1d(llm_base::ElementType::I32, input_len);
                 unsafe { positions.write_data(bytemuck::cast_slice(&position_buf)) };
+                print_shape(&positions, "positions");
 
                 // IL += token_types
                 input_layer = ctx0.op_add(
                     &input_layer,
                     &ctx0.op_get_rows(&self.token_type_embeddings, &token_types),
                 );
+                print_shape(&input_layer, "input_layer");
 
                 // IL += position_embeddings
                 input_layer = ctx0.op_add(
                     &input_layer,
                     &ctx0.op_get_rows(&self.position_embeddings, &positions),
                 );
+                print_shape(&input_layer, "input_layer");
             }
 
             // embd norm
@@ -234,6 +239,7 @@ impl KnownModel for Bert {
                 input_layer = ctx0.op_norm(&input_layer);
                 input_layer = ctx0.op_add(&ctx0.op_mul(&input_layer, &self.ln_e_w), &self.ln_e_b);
             }
+            print_shape(&input_layer, "input_layer");
 
             for il in 0..n_layer {
                 ctx0.set_offloading(self.params.should_offload(il));
@@ -243,68 +249,70 @@ impl KnownModel for Bert {
                 // self-attention
                 {
                     print_shape(&current, "current");
-                    let q_current = ctx0.op_reshape_3d(
-                        &ctx0.op_mul_mat(&self.layers[il].q_w, &current),
+                    let q = ctx0.op_reshape_3d(
+                        &ctx0.op_add(
+                            &ctx0.op_mul_mat(&self.layers[il].q_w, &current),
+                            &self.layers[il].q_b,
+                        ),
                         d_head,
-                        n_head,
                         input_len,
+                        n_head,
                     );
-                    let q = ctx0.op_permute(&q_current, (0, 2, 1, 3));
-                    print_shape(&q, "q");
                     let q = ctx0.op_cpy(
                         &q,
                         &ctx0.new_tensor_3d(ggml::Type::F32, d_head, input_len, n_head),
                     );
+                    print_shape(&q, "q");
 
-                    let k_current = ctx0.op_reshape_3d(
+                    let k = ctx0.op_reshape_3d(
                         &ctx0.op_add(
                             &ctx0.op_mul_mat(&self.layers[il].k_w, &current),
                             &self.layers[il].k_b,
                         ),
                         d_head,
-                        n_head,
                         input_len,
+                        n_head,
                     );
-                    let k = ctx0.op_permute(&k_current, (0, 2, 1, 3));
-                    print_shape(&k, "k");
                     let k = ctx0.op_cpy(
                         &k,
                         &ctx0.new_tensor_3d(ggml::Type::F16, d_head, input_len, n_head),
                     );
+                    print_shape(&k, "k");
 
-                    let v_current = ctx0.op_reshape_3d(
+                    let mut v = ctx0.op_reshape_3d(
                         &ctx0.op_add(
                             &ctx0.op_mul_mat(&self.layers[il].v_w, &current),
                             &self.layers[il].v_b,
                         ),
                         d_head,
-                        n_head,
                         input_len,
+                        n_head,
                     );
-                    let mut v = ctx0.op_permute(&v_current, (0, 2, 1, 3));
                     v = ctx0.op_cpy(
                         &v,
                         &ctx0.new_tensor_3d(ggml::Type::F16, d_head, input_len, n_head),
                     );
+                    print_shape(&v, "v");
 
                     let mut kq = ctx0.op_mul_mat(&k, &q);
+                    print_shape(&kq, "kq");
 
                     // TODO: look into op_scale_inplace and op_soft_max_inplace
-                    // kq = ctx0.op_scale(
-                    //     &kq,
-                    //     &ctx0.new_f32(1.0 / ((n_embd as f32 / n_head as f32).sqrt())),
-                    // );
-                    // kq = ctx0.op_soft_max(&kq);
+                    kq = ctx0.op_scale(
+                        &kq,
+                        &ctx0.new_f32(1.0 / ((n_embd as f32 / n_head as f32).sqrt())),
+                    );
+                    kq = ctx0.op_soft_max(&kq);
 
                     v = ctx0.op_cont(&ctx0.op_transpose(&v));
+                    print_shape(&v, "v");
 
-                    let mut kqv = ctx0.op_mul_mat(&v, &kq);
-                    kqv = ctx0.op_permute(&kqv, (0, 2, 1, 3));
+                    let kqv =
+                        ctx0.op_reshape_3d(&ctx0.op_mul_mat(&v, &kq), d_head, n_head, input_len);
+                    print_shape(&kqv, "kqv");
 
-                    current = ctx0.op_cpy(
-                        &kqv,
-                        &ctx0.new_tensor_2d(ggml::Type::F32, n_embd, input_len),
-                    );
+                    current = ctx0.op_reshape_2d(&kqv, n_embd, input_len);
+                    print_shape(&current, "current");
                 }
 
                 // attention output
@@ -482,5 +490,10 @@ struct Layer {
 }
 
 fn print_shape(t: &ggml::Tensor, name: &str) {
-    // println!("{name} {} [{}] {:?}", t.get_type(), t.is_contiguous(), t.get_ne());
+    println!(
+        "{name} {} [{}] {:?}",
+        t.get_type(),
+        t.is_contiguous(),
+        t.get_ne()
+    );
 }
