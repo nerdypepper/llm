@@ -109,6 +109,7 @@ impl<'session> BuildContext<'session> {
 }
 
 unsafe impl Send for InferenceSession {}
+unsafe impl Sync for InferenceSession {}
 impl InferenceSession {
     /// Create a new InferenceSession
     pub fn new(
@@ -254,24 +255,12 @@ impl InferenceSession {
 
         #[cfg(feature = "metal")]
         {
-            // FIXME can only process one token at a time currently
-            // See https://github.com/ggerganov/llama.cpp/blob/e1886cf4fe0d0f31661dda52a4a9f34bd9b9009a/llama.cpp#L1692
-            if input_tokens.len() == 1 {
-                if let Some(ref metal_context) = self.metal_context {
-                    metal_context.graph_compute(&mut built_gf);
-                    metal_context.get_tensor(&built_result.result);
-                } else {
-                    let mut plan = GraphExecutionPlan::new(&mut built_gf, self.config.n_threads);
-                    plan.execute(ctx0);
-                }
+            if let Some(ref metal_context) = self.metal_context {
+                metal_context.graph_compute(&mut built_gf);
+                metal_context.get_tensor(&built_result.result);
             } else {
-                if let Some(ref metal_context) = self.metal_context {
-                    metal_context.graph_compute(&mut built_gf);
-                    metal_context.get_tensor(&built_result.result);
-                } else {
-                    let mut plan = GraphExecutionPlan::new(&mut built_gf, self.config.n_threads);
-                    plan.execute(ctx0);
-                }
+                let mut plan = GraphExecutionPlan::new(&mut built_gf, self.config.n_threads);
+                plan.execute(ctx0);
             }
         }
         #[cfg(not(feature = "metal"))]

@@ -478,9 +478,9 @@ pub fn load<M: KnownModel>(
     );
 
     // TODO: this is temporary while we figure out how to handle this
-    if tensors.values().any(|t| t.element_type.is_quantized()) {
-        assert_eq!(quantization_version, 2, "quantization version must be 2");
-    }
+    // if tensors.values().any(|t| t.element_type.is_quantized()) {
+    //     assert_eq!(quantization_version, 2, "quantization version must be 2");
+    // }
 
     let use_mmap =
         params.prefer_mmap && container_type.support_mmap() && params.lora_adapters.is_none();
