@@ -7,6 +7,23 @@
     {
       "type": "lldb",
       "request": "launch",
+      "name": "Debug BERT",
+      
+      "cargo": {
+        "args": ["build",
+        "--bin",
+        "llm", "--features=metal,bert", "--example=bench"],
+        "filter": {
+          "name": "bench",
+          "kind": "example"
+        }
+      },
+      "args": ["--use-gpu=true"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
       "name": "Debug BLOOM Inference",
       "cargo": {
         "args": ["build", "--example=inference", "--package=llm"],

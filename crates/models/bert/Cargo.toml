@@ -11,4 +11,5 @@ readme = "../../../README.md"
 bytemuck.workspace = true
 llm-base = { path = "../../llm-base", version = "0.2.0-dev" }
 tracing = { version = "0.1", features = ["log"] }
+num-traits = "0.2"
 

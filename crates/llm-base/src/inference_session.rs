@@ -34,6 +34,8 @@ pub struct GraphOutputs {
 
     /// The output containing embeddings
     pub embedding_result: Tensor,
+
+    
 }
 
 /// An inference session represents the state of the text generation. This holds

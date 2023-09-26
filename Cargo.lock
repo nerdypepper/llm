@@ -1305,6 +1305,7 @@ version = "0.2.0-dev"
 dependencies = [
  "bytemuck",
  "llm-base",
+ "num-traits",
  "tracing",
 ]
 
