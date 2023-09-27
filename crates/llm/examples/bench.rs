@@ -71,7 +71,7 @@ fn main() {
     let model_architecture = llm::ModelArchitecture::Bert;
     let model_path = args.model_path.unwrap();
     // TODO: read as argument
-    let queries = vec!["the cat sat on the mat", "the quick brown fox jumped over"];
+    let queries = vec!["hello", "hello2"];
 
     // Load model
     let mut model_params = llm::ModelParameters::default();
@@ -171,7 +171,7 @@ fn get_embeddings(
     model.evaluate(&mut session, &query_token_ids, &mut output_request);
     let _embeddings = output_request.embeddings.unwrap();
     
-    // dbg!(&_embeddings[..10]);
+    dbg!(&_embeddings[..16]);
 
      BenchResult {
         elapsed: s.elapsed(),

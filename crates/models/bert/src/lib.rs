@@ -181,7 +181,16 @@ impl KnownModel for Bert {
         input_tokens: &[TokenId],
         output_request: &mut OutputRequest,
     ) {
-        let input_tokens = &input_tokens[..7.min(input_tokens.len())]; // take 256 or less tokens
+       let  example_len: usize = input_tokens
+            .iter()
+            .map(|&i|  if i == self.pad_token_id().unwrap() {
+                0
+            } else {
+                1
+            }).sum();
+
+            
+        let input_tokens = &input_tokens[..example_len]; 
         let input_len = input_tokens.len();
         let _session_len = session.n_past;
         let _ctx_size = self.params.context_size;
@@ -357,6 +366,15 @@ impl KnownModel for Bert {
             }
             input_layer = ctx0.op_cont(&ctx0.op_transpose(&input_layer));
 
+            let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F16, example_len, 1);
+            sum = ctx0.set_f32(&sum, 1.0);
+            input_layer = ctx0.op_mul_mat(&sum, &input_layer);
+            input_layer = ctx0.op_reshape_2d(&input_layer, n_embd,1);
+            input_layer = ctx0.op_norm(&input_layer);
+            input_layer =
+                ctx0.op_scale(&input_layer, &ctx0.new_f32(1.0 / ((n_embd as f32).sqrt())));
+
+
             // ctx0.set_offloading(false);
             // pooler
             // let mut sum = ctx0.new_tensor_2d(llm_base::ElementType::F32, input_len, 1);
@@ -385,7 +403,7 @@ impl KnownModel for Bert {
         // finish evaluation
         common::read_last_token(session, &outputs.result, n_vocab, input_len);
         common::extract_logits(output_request, &outputs.result, n_vocab, input_len);
-        common::extract_embeddings(output_request, &outputs.embedding_result, n_embd, input_len);
+        common::extract_embeddings(output_request, &outputs.embedding_result, n_embd, 1);
     }
 
     /// Run BERT inference for batched examples
