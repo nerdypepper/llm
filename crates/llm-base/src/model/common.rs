@@ -46,10 +46,10 @@ pub fn extract_embeddings(
 ) {
     // Extract embeddings
     if let Some(embeddings) = &mut output_request.embeddings {
-        embeddings.resize(n_embd  * n, 0.0);
-        dbg!(embeddings_tensor.get_ne());
+        embeddings.resize(n_embd * n, 0.0);
+        embeddings_tensor.get_ne();
 
-        assert_eq!(embeddings_tensor.nelements(), n_embd *  n);
+        assert_eq!(embeddings_tensor.nelements(), n_embd * n);
         unsafe {
             embeddings_tensor.read_data(0, bytemuck::cast_slice_mut(embeddings));
         }
