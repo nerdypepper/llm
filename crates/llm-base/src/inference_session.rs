@@ -34,8 +34,6 @@ pub struct GraphOutputs {
 
     /// The output containing embeddings
     pub embedding_result: Tensor,
-
-    
 }
 
 /// An inference session represents the state of the text generation. This holds
@@ -185,9 +183,9 @@ impl InferenceSession {
                 let mut metal_context = MetalContext::new(config.n_threads);
                 metal_context.add_scratch_buffer(ctx0.storage().as_buffer().unwrap());
 
-                for buf in scratch.iter() {
-                    metal_context.add_scratch_buffer(buf);
-                }
+                // for buf in scratch.iter() {
+                //     metal_context.add_scratch_buffer(buf);
+                // }
                 metal_context.add_context(session_ctx.clone());
                 Some(metal_context)
             } else {
