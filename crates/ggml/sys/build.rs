@@ -33,9 +33,10 @@ fn main() {
         if cfg_metal() {
             enable_metal(build, &out_dir);
         } else {
-            println!("cargo:rustc-link-lib=framework=Accelerate");
+            // TODO: this breaks batching in bert
+            // println!("cargo:rustc-link-lib=framework=Accelerate");
 
-            build.define("GGML_USE_ACCELERATE", None);
+            // build.define("GGML_USE_ACCELERATE", None);
         }
     }
 
